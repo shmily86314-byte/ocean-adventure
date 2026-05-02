@@ -2138,7 +2138,7 @@ class Game {
     _triggerGithubAction(name, score, token) {
         // 方式1: fetch API (CORS可能失败)
         try {
-            var wfUrl = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard.yml/dispatches';
+            var wfUrl = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard2.yml/dispatches';
             var body = JSON.stringify({ ref: 'main', inputs: { name: name, score: score } });
             
             // 尝试 Content-Type: text/plain (简单请求，不触发CORS预检)
@@ -2164,7 +2164,7 @@ class Game {
         try {
             var form = document.createElement('form');
             form.method = 'POST';
-            form.action = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard.yml/dispatches?access_token=' + token;
+            form.action = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard2.yml/dispatches?access_token=' + token;
             form.enctype = 'text/plain';
             form.target = '_hiddenFrame';
             form.style.display = 'none';
