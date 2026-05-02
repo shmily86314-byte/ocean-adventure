@@ -2206,15 +2206,14 @@ class Game {
         tryAPIFirst();
     }
 
-    // 同步分数到云端（最佳努力，CORS可能导致失败）
+    // 同步分数到云端（通过GitHub Issues API，CORS友好）
     _triggerGithubAction(name, score, token) {
-        // GitHub API要求inputs的值为字符串
-        var body = JSON.stringify({ ref: 'main', inputs: { name: name, score: String(score) } });
+        // 创建issue: title="score:NAME:SCORE" → Actions workflow处理并关闭
+        var body = JSON.stringify({ title: 'score:' + name + ':' + score, body: 'auto' });
+        var url = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/issues';
         
-        // 方式1: fetch - Content-Type: text/plain (CORS简单请求，不触发预检)
+        // 方式1: fetch - token在URL中，Content-Type: text/plain (CORS简单请求)
         try {
-            var url = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/sync.yml/dispatches';
-            // token在URL参数中，避免自定义Authorization头(CORS限制)
             fetch(url + '?access_token=' + token, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
@@ -2222,10 +2221,9 @@ class Game {
             }).catch(function() {});
         } catch(e) {}
         
-        // 方式2: sendBeacon (CORS友好的异步POST)
+        // 方式2: sendBeacon (最CORS友好的异步POST)
         try {
-            var url2 = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/sync.yml/dispatches?access_token=' + token;
-            navigator.sendBeacon(url2, new Blob([body], { type: 'text/plain' }));
+            navigator.sendBeacon(url + '?access_token=' + token, new Blob([body], { type: 'text/plain' }));
         } catch(e) {}
     }
 

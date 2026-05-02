@@ -8,22 +8,58 @@ on:
       score:
         required: true
         type: number
+  issues:
+    types: [opened]
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update leaderboard
+      - name: Process issue
+        if: github.event_name == 'issues'
+        env:
+          TITLE: ${{ github.event.issue.title }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          # 解析标题: "score:NAME:SCORE"
+          IFS=':' read -r prefix NAME SCORE <<< "$TITLE"
+          if [ "$prefix" != "score" ]; then exit 0; fi
+          export PN="$NAME"
+          export PS="$SCORE"
+          python3 -c "
+import json,os
+d=json.load(open('leaderboard.json')) if __import__('os').path.exists('leaderboard.json') else []
+if isinstance(d,list):
+    d.append({'name':os.environ['PN'],'score':int(os.environ['PS'])})
+    d.sort(key=lambda x:x.get('score',0),reverse=True)
+    d=d[:10]
+    json.dump(d,open('leaderboard.json','w'),ensure_ascii=False)
+"
+          # 关闭issue
+          curl -s -X PATCH "${{ github.event.issue.url }}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"state":"closed"}'
+
+      - name: Process dispatch
+        if: github.event_name == 'workflow_dispatch'
         env:
           PN: ${{ github.event.inputs.name }}
           PS: ${{ github.event.inputs.score }}
         run: |
-          if [ ! -f leaderboard.json ]; then echo '[]' > leaderboard.json; fi
-          python3 -c "import json,os;d=json.load(open('leaderboard.json'));d.append({'name':os.environ['PN'],'score':int(os.environ['PS'])});d.sort(key=lambda x:x.get('score',0),reverse=True);d=d[:10];json.dump(d,open('leaderboard.json','w'),ensure_ascii=False)"
+          python3 -c "
+import json,os
+d=json.load(open('leaderboard.json'))
+d.append({'name':os.environ['PN'],'score':int(os.environ['PS'])})
+d.sort(key=lambda x:x.get('score',0),reverse=True)
+d=d[:10]
+json.dump(d,open('leaderboard.json','w'),ensure_ascii=False)
+"
 
       - name: Commit
         run: |
