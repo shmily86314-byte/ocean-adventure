@@ -54,9 +54,9 @@ const CONFIG = {
     INVINCIBLE: 90,
     DRAG: 0.92,
     GAME_DURATION: 60,
-    // GitHub 跨设备排行榜
-    GITHUB_TOKEN: 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8',
+    // 跨设备排行榜（jsDelivr CDN读取，国内可用）
     GITHUB_REPO: 'shmily86314-byte/ocean-adventure',
+    LEADERBOARD_CDN: 'https://cdn.jsdelivr.net/gh/shmily86314-byte/ocean-adventure@main/leaderboard.json',
     LEADERBOARD_RAW: 'https://raw.githubusercontent.com/shmily86314-byte/ocean-adventure/main/leaderboard.json',
 };
 
@@ -96,22 +96,27 @@ const SPRITE_FRAMES = {};
 SPRITE_NAMES.forEach(function(name) { SPRITE_FRAMES[name] = { cols: 2, rows: 2 }; });
 let spritesReady = false;
 let spritesLoadedCount = 0;
+// CDN优先加载（jsDelivr有国内加速节点），回退到相对路径
+const CDN_BASE = 'https://cdn.jsdelivr.net/gh/shmily86314-byte/ocean-adventure@main/assets/';
 
 (function loadSprites() {
     for (let i = 0; i < SPRITE_NAMES.length; i++) {
-        const idx = i;
+        const idx = i, name = SPRITE_NAMES[i];
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = function() {
             SPRITES[idx] = img;
             spritesLoadedCount++;
             if (spritesLoadedCount >= SPRITE_NAMES.length) spritesReady = true;
         };
         img.onerror = function() {
-            SPRITES[idx] = null;
-            spritesLoadedCount++;
-            if (spritesLoadedCount >= SPRITE_NAMES.length) spritesReady = true;
+            // 回退到GitHub Pages相对路径
+            const fallback = new Image();
+            fallback.onload = function() { SPRITES[idx] = fallback; spritesLoadedCount++; if (spritesLoadedCount >= SPRITE_NAMES.length) spritesReady = true; };
+            fallback.onerror = function() { SPRITES[idx] = null; spritesLoadedCount++; if (spritesLoadedCount >= SPRITE_NAMES.length) spritesReady = true; };
+            fallback.src = 'assets/' + name + '.png?' + Date.now();
         };
-        img.src = 'assets/' + SPRITE_NAMES[i] + '.png?' + Date.now();
+        img.src = CDN_BASE + name + '.png?' + Date.now();
     }
 })();
 
@@ -2005,89 +2010,93 @@ class Game {
     // 从GitHub加载排行榜
     _loadLeaderboard(callback) {
         var self = this;
+        var local = self._loadHighScore();
+        self.leaderboard = local;
+
+        // 先从CDN读取（jsDelivr在国内有加速）
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
+        xhr.open('GET', CONFIG.LEADERBOARD_CDN + '?' + Date.now(), true);
         xhr.onload = function() {
             try {
                 var data = JSON.parse(xhr.responseText);
                 if (Array.isArray(data) && data.length > 0) {
                     self.leaderboard = data;
-                    self._saveHighScore(data); // 本地缓存
+                    self._saveHighScore(data);
                     if (callback) callback(data);
                     return;
                 }
             } catch(e) {}
-            // 回退本地
-            var local = self._loadHighScore();
-            self.leaderboard = local;
-            if (callback) callback(local);
+            // CDN失败，尝试raw URL
+            var xhr2 = new XMLHttpRequest();
+            xhr2.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
+            xhr2.onload = function() {
+                try {
+                    var d2 = JSON.parse(xhr2.responseText);
+                    if (Array.isArray(d2) && d2.length > 0) {
+                        self.leaderboard = d2;
+                        self._saveHighScore(d2);
+                        if (callback) callback(d2); return;
+                    }
+                } catch(e) {}
+                if (callback) callback(local);
+            };
+            xhr2.onerror = function() { if (callback) callback(local); };
+            xhr2.send();
         };
         xhr.onerror = function() {
-            var local = self._loadHighScore();
-            self.leaderboard = local;
-            if (callback) callback(local);
+            // CDN离线，尝试raw URL
+            var xhr2 = new XMLHttpRequest();
+            xhr2.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
+            xhr2.onload = function() {
+                try {
+                    var d2 = JSON.parse(xhr2.responseText);
+                    if (Array.isArray(d2) && d2.length > 0) {
+                        self.leaderboard = d2; self._saveHighScore(d2);
+                    }
+                } catch(e) {}
+                if (callback) callback(self.leaderboard);
+            };
+            xhr2.onerror = function() { if (callback) callback(local); };
+            xhr2.send();
         };
         xhr.send();
     }
 
-    // 提交记录到GitHub
+    // 提交记录（保存到本地+尝试同步到GitHub）
     _submitRecord(name) {
         var self = this;
-        var score = this.player.score;
-        var entry = { name: name, score: score };
+        var entry = { name: name, score: this.player.score };
 
-        // 先从GitHub读最新排行榜
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
-        xhr.onload = function() {
-            var list = [];
-            try { list = JSON.parse(xhr.responseText); } catch(e) {}
-            if (!Array.isArray(list)) list = [];
+        // 先读已有排行榜，合并新记录
+        var list = self._loadHighScore();
+        list.push(entry);
+        list.sort(function(a, b) { return b.score - a.score; });
+        list = list.slice(0, 10);
+        self.leaderboard = list;
+        self._saveHighScore(list);
 
-            // 加入新记录
-            list.push(entry);
-            list.sort(function(a, b) { return b.score - a.score; });
-            list = list.slice(0, 10);
-
-            self.leaderboard = list;
-            self._saveHighScore(list);
-
-            // 通过GitHub API写入
+        // 尝试用fetch同步到GitHub（可能因CORS失败，失败不影响本地）
+        try {
+            var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
             var api = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/contents/leaderboard.json';
-            var getXhr = new XMLHttpRequest();
-            getXhr.open('GET', api, true);
-            getXhr.setRequestHeader('Authorization', 'token ' + CONFIG.GITHUB_TOKEN);
-            getXhr.onload = function() {
-                var sha = null;
-                try { sha = JSON.parse(getXhr.responseText).sha; } catch(e) {}
+            var h = new Headers();
+            h.append('Authorization', 'token ' + token);
+            h.append('Content-Type', 'application/json');
+            fetch(api, { method: 'GET', headers: h })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var sha = d.sha;
                 var content = btoa(unescape(encodeURIComponent(JSON.stringify(list))));
-                var putXhr = new XMLHttpRequest();
-                putXhr.open('PUT', api, true);
-                putXhr.setRequestHeader('Authorization', 'token ' + CONFIG.GITHUB_TOKEN);
-                putXhr.setRequestHeader('Content-Type', 'application/json');
-                putXhr.send(JSON.stringify({
-                    message: 'Update leaderboard',
-                    content: content,
-                    sha: sha,
-                    branch: 'main'
-                }));
-            };
-            getXhr.send();
+                fetch(api, {
+                    method: 'PUT',
+                    headers: h,
+                    body: JSON.stringify({ message: 'Update', content: content, sha: sha, branch: 'main' })
+                }).catch(function(e) {});
+            })
+            .catch(function(e) {});
+        } catch(e) {}
 
-            // 隐藏输入框，刷新排行榜
-            self._hideNameInput();
-        };
-        xhr.onerror = function() {
-            // 离线回退
-            var list = self._loadHighScore();
-            list.push(entry);
-            list.sort(function(a, b) { return b.score - a.score; });
-            list = list.slice(0, 10);
-            self.leaderboard = list;
-            self._saveHighScore(list);
-            self._hideNameInput();
-        };
-        xhr.send();
+        self._hideNameInput();
     }
 
     _showNameInput() {
