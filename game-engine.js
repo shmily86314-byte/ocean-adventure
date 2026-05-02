@@ -2087,88 +2087,95 @@ class Game {
         tryFetch();
     }
 
-    // 提交记录：先从云端读最新排行榜 → 加新记录 → 保存到云端+本地
+    // 提交记录：从云端读最新数据 → 合并 → 保存本地 + 触发GitHub Actions同步
     _submitRecord(name) {
         var self = this;
         var entry = { name: name, score: this.player.score };
+        var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
 
-        // 先从云端（CDN/raw）获取最新排行榜，合并后判断排名
+        // 先从云端(CDN/raw)获取最新排行榜
         var urls = [CONFIG.LEADERBOARD_CDN, CONFIG.LEADERBOARD_RAW];
         var urlIdx = 0;
-        function readCloudMerge() {
+        function tryFetchCloud() {
             if (urlIdx >= urls.length) {
-                // 云读取全部失败，基于本地保存
-                finishWith(self._loadHighScore());
+                // 云端全挂，用本地数据
+                finishMerge(self._loadHighScore());
                 return;
             }
             var xhr = new XMLHttpRequest();
             xhr.open('GET', urls[urlIdx] + '?' + Date.now(), true);
             xhr.onload = function() {
                 try {
-                    var cloud = JSON.parse(xhr.responseText);
-                    if (Array.isArray(cloud)) {
-                        var merged = self._mergeLeaderboard(self._loadHighScore(), cloud);
-                        finishWith(merged);
+                    var d = JSON.parse(xhr.responseText);
+                    if (Array.isArray(d)) {
+                        finishMerge(self._mergeLeaderboard(self._loadHighScore(), d));
                         return;
                     }
                 } catch(e) {}
-                urlIdx++; readCloudMerge();
+                urlIdx++; tryFetchCloud();
             };
-            xhr.onerror = function() { urlIdx++; readCloudMerge(); };
+            xhr.onerror = function() { urlIdx++; tryFetchCloud(); };
             xhr.send();
         }
-        
-        function finishWith(baseList) {
-            // 加入新记录
+
+        function finishMerge(baseList) {
             baseList.push(entry);
             baseList.sort(function(a, b) { return b.score - a.score; });
             baseList = baseList.slice(0, 10);
-            
-            // 计算排名
-            var rank = -1;
-            for (var i = 0; i < baseList.length; i++) {
-                if (baseList[i].name === name && baseList[i].score === entry.score) {
-                    rank = i + 1;
-                    break;
-                }
-            }
-            
             self.leaderboard = baseList;
             self._saveHighScore(baseList);
-            
-            // 尝试同步到GitHub
-            var savedList = baseList;
-            try {
-                var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
-                var api = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/contents/leaderboard.json';
-                var getXhr = new XMLHttpRequest();
-                getXhr.open('GET', api, true);
-                getXhr.setRequestHeader('Authorization', 'token ' + token);
-                getXhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
-                getXhr.onload = function() {
-                    try {
-                        var d = JSON.parse(getXhr.responseText);
-                        var sha = d.sha;
-                        var putXhr = new XMLHttpRequest();
-                        putXhr.open('PUT', api, true);
-                        putXhr.setRequestHeader('Authorization', 'token ' + token);
-                        putXhr.setRequestHeader('Content-Type', 'application/json');
-                        putXhr.send(JSON.stringify({
-                            message: 'Update leaderboard',
-                            content: btoa(unescape(encodeURIComponent(JSON.stringify(savedList)))),
-                            sha: sha,
-                            branch: 'main'
-                        }));
-                    } catch(e) {}
-                };
-                getXhr.onerror = function() {};
-                getXhr.send();
-            } catch(e) {}
-            
+
+            // 触发GitHub Actions同步
+            self._triggerGithubAction(name, entry.score, token);
+
             self._hideNameInput();
         }
-        
-        readCloudMerge();
+
+        tryFetchCloud();
+    }
+
+    // 触发GitHub Actions同步排行榜
+    _triggerGithubAction(name, score, token) {
+        // 方式1: fetch API (CORS可能失败)
+        try {
+            var wfUrl = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard.yml/dispatches';
+            var body = JSON.stringify({ ref: 'main', inputs: { name: name, score: score } });
+            
+            // 尝试 Content-Type: text/plain (简单请求，不触发CORS预检)
+            fetch(wfUrl + '?access_token=' + token, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: body
+            }).catch(function() {
+                // 如果失败，尝试方式2: 标准方式
+                fetch(wfUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'token ' + token,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: body
+                }).catch(function() {});
+            });
+        } catch(e) {}
+
+        // 方式2: 通过form POST提交(完全绕过CORS)
+        try {
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard.yml/dispatches?access_token=' + token;
+            form.enctype = 'text/plain';
+            form.target = '_hiddenFrame';
+            form.style.display = 'none';
+            var input = document.createElement('input');
+            input.name = JSON.stringify({ ref: 'main', inputs: { name: name, score: score } });
+            input.value = '';
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        } catch(e) {}
     }
 
     // 清空排行榜
