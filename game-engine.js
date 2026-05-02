@@ -2260,12 +2260,14 @@ class Game {
         if (title) {
             title.textContent = this.isNewRecord ? '\u{1F451} 新纪录！' : '\u{1F3C6} 进入前十！';
         }
-        document.getElementById('nameOverlay').style.display = 'flex';
-        document.getElementById('playerName').value = '';
-        document.getElementById('playerName').focus();
+        var overlay = document.getElementById('nameOverlay');
+        if (overlay) overlay.style.display = 'flex';
+        var input = document.getElementById('playerName');
+        if (input) { input.value = ''; input.focus(); }
     }
     _hideNameInput() {
-        document.getElementById('nameOverlay').style.display = 'none';
+        var el = document.getElementById('nameOverlay');
+        if (el) el.style.display = 'none';
     }
 
     gameOver() {
