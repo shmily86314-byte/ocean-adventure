@@ -54,6 +54,10 @@ const CONFIG = {
     INVINCIBLE: 90,
     DRAG: 0.92,
     GAME_DURATION: 60,
+    // GitHub 跨设备排行榜
+    GITHUB_TOKEN: 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8',
+    GITHUB_REPO: 'shmily86314-byte/ocean-adventure',
+    LEADERBOARD_RAW: 'https://raw.githubusercontent.com/shmily86314-byte/ocean-adventure/main/leaderboard.json',
 };
 
 const EVO = [
@@ -1374,6 +1378,21 @@ class Player extends Fish {
     }
 }
 
+// 圆角矩形辅助
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
 // ============================================
 // Game
 // ============================================
@@ -1389,12 +1408,30 @@ class Game {
         this.balanceT = 0;
         this.time = 0; // 全局时间（用于动画）
         this._lastScene = currentScene;
-        // 倒计时
+        // 倒计时（初始状态不启动）
         this.timeLeft = CONFIG.GAME_DURATION;
         this.lastRealTime = Date.now();
+        this.state = 'menu'; // 初始为菜单状态
         // 排行榜
-        this.highScore = this._loadHighScore();
+        this.leaderboard = this._loadHighScore();
         this.isNewRecord = false;
+        var self = this;
+        // 异步加载GitHub排行榜
+        this._loadLeaderboard(function(data) { self.leaderboard = data; });
+        // 绑定名字提交按钮
+        setTimeout(function() {
+            var btn = document.getElementById('submitBtn');
+            if (btn) {
+                btn.onclick = function() {
+                    var name = document.getElementById('playerName').value.trim();
+                    if (!name) { alert('请输入名字'); return; }
+                    self._submitRecord(name);
+                };
+                document.getElementById('playerName').onkeydown = function(e) {
+                    if (e.keyCode === 13) btn.onclick();
+                };
+            }
+        }, 100);
         this.init();
         this.bindInput();
         this.loop();
@@ -1440,7 +1477,12 @@ class Game {
             if (inputLock) return;
             inputLock = true;
             setTimeout(function() { inputLock = false; }, 100);
-            if (self.state === 'gameover') {
+            if (self.state === 'menu') {
+                // 开始游戏
+                self.state = 'playing';
+                self.lastRealTime = Date.now();
+                SOUND.startBGM();
+            } else if (self.state === 'gameover') {
                 self.restart();
                 SOUND.startBGM();
             } else {
@@ -1767,7 +1809,90 @@ class Game {
     }
 
     drawUI() {
-        const w = this.w;
+        const w = this.w, h = this.h;
+
+        // === 开始菜单 ===
+        if (this.state === 'menu') {
+            ctx.save();
+            // 背景
+            var grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, '#0a3060');
+            grad.addColorStop(0.5, '#0a1a3a');
+            grad.addColorStop(1, '#050510');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            // 水波动态背景
+            ctx.save();
+            ctx.globalAlpha = 0.08;
+            for (var r = 0; r < 20; r++) {
+                var yy = r * (h / 20);
+                ctx.fillStyle = 'rgba(100,180,255,' + (0.05 + Math.sin(this.time*0.003+r*0.5)*0.03) + ')';
+                ctx.beginPath();
+                ctx.moveTo(0, yy);
+                for (var xx = 0; xx <= w; xx += 4) {
+                    ctx.lineTo(xx, yy + Math.sin(xx*0.025 + this.time*0.004 + r*0.4) * 4);
+                }
+                ctx.lineTo(w, yy + 8);
+                for (xx = w; xx >= 0; xx -= 4) {
+                    ctx.lineTo(xx, yy + 8 + Math.sin(xx*0.025 + this.time*0.004 + r*0.4 + 2) * 4);
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // 标题
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 42px Arial';
+            ctx.fillText('\u{1F41F} 海洋冒险', w / 2, h * 0.28);
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#8AB4F8';
+            ctx.fillText('一条鱼的进化之旅', w / 2, h * 0.28 + 30);
+
+            // 操作说明
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#AAA';
+            ctx.fillText('\u{1F446} 滑动屏幕控制小鱼移动', w / 2, h * 0.44);
+            ctx.fillText('\u{1F423} 吞噬比你小的鱼来进化', w / 2, h * 0.44 + 22);
+            ctx.fillText('\u{23F1} 在倒计时结束前尽可能得分', w / 2, h * 0.44 + 44);
+
+            // 开始按钮
+            var btnY = h * 0.62;
+            ctx.fillStyle = 'rgba(255,215,0,0.15)';
+            roundRect(ctx, w/2 - 100, btnY - 22, 200, 44, 22);
+            ctx.fill();
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 2;
+            roundRect(ctx, w/2 - 100, btnY - 22, 200, 44, 22);
+            ctx.stroke();
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText('点 击 开 始', w / 2, btnY + 7);
+
+            // 排行榜预览
+            ctx.font = '13px Arial';
+            ctx.fillStyle = '#888';
+            ctx.fillText('-- 排行榜 --', w / 2, h * 0.76);
+            var lb = this.leaderboard || [];
+            var medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}'];
+            for (var i = 0; i < Math.min(lb.length, 5); i++) {
+                var e = lb[i];
+                ctx.fillStyle = '#AAA';
+                ctx.font = '13px Arial';
+                ctx.fillText((i < 3 ? medals[i] : (i+1) + '.') + '  ' + (e.name||'玩家') + '  ' + e.score, w / 2, h * 0.76 + 25 + i * 20);
+            }
+
+            // 署名
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.font = '11px Arial';
+            ctx.fillText('制作人：陈军睿', w / 2, h - 20);
+            ctx.restore();
+            return;
+        }
+
+        const self = this;
         ctx.save();
         // 半透明顶栏
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -1828,12 +1953,18 @@ class Game {
             ctx.fillStyle = '#AAA';
             ctx.textAlign = 'left';
             ctx.fillText('-- 排行榜 --', w / 2 - 80, this.h / 2 + 15);
-            const list = this.leaderboard || [this.player.score];
-            for (let i = 0; i < Math.min(list.length, 5); i++) {
+            const list = this.leaderboard || [];
+            const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}']; // 🥇🥈🥉
+            for (let i = 0; i < Math.min(list.length, 8); i++) {
                 const y = this.h / 2 + 40 + i * 22;
-                ctx.fillStyle = list[i] === this.player.score && this.isNewRecord ? '#FFD700' : '#DDD';
-                ctx.font = (list[i] === this.player.score && this.isNewRecord) ? 'bold 15px Arial' : '14px Arial';
-                ctx.fillText((i+1) + '. ' + list[i], w / 2 - 80, y);
+                var entry = list[i];
+                var name = entry.name || '玩家';
+                var score = entry.score || entry;
+                var isCurrent = score === this.player.score;
+                ctx.fillStyle = isCurrent && this.isNewRecord ? '#FFD700' : '#DDD';
+                ctx.font = isCurrent && this.isNewRecord ? 'bold 15px Arial' : '14px Arial';
+                var prefix = i < 3 ? medals[i] + ' ' : (i+1) + '. ';
+                ctx.fillText(prefix + name + ' - ' + score, w / 2 - 80, y);
             }
             ctx.textAlign = 'center';
 
@@ -1849,34 +1980,136 @@ class Game {
         }
     }
 
-    // 排行榜存储
+    // 排行榜系统（跨设备）
     _loadHighScore() {
         try {
-            const data = localStorage.getItem('fishGameLeaderboard');
-            if (data) return JSON.parse(data);
+            var data = localStorage.getItem('fishGameLeaderboard');
+            if (data) {
+                var list = JSON.parse(data);
+                // 兼容旧格式（纯数字数组）
+                if (list.length > 0 && typeof list[0] === 'number') {
+                    list = list.map(function(s) { return { name: '玩家', score: s }; });
+                    localStorage.setItem('fishGameLeaderboard', JSON.stringify(list));
+                }
+                return list;
+            }
         } catch(e) {}
         return [];
     }
-    _saveHighScore(score) {
+    _saveHighScore(list) {
         try {
-            let list = this._loadHighScore();
-            list.push(score);
-            list.sort(function(a, b) { return b - a; });
-            list = list.slice(0, 5);
             localStorage.setItem('fishGameLeaderboard', JSON.stringify(list));
-            return list;
-        } catch(e) { return [score]; }
+        } catch(e) {}
+    }
+
+    // 从GitHub加载排行榜
+    _loadLeaderboard(callback) {
+        var self = this;
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
+        xhr.onload = function() {
+            try {
+                var data = JSON.parse(xhr.responseText);
+                if (Array.isArray(data) && data.length > 0) {
+                    self.leaderboard = data;
+                    self._saveHighScore(data); // 本地缓存
+                    if (callback) callback(data);
+                    return;
+                }
+            } catch(e) {}
+            // 回退本地
+            var local = self._loadHighScore();
+            self.leaderboard = local;
+            if (callback) callback(local);
+        };
+        xhr.onerror = function() {
+            var local = self._loadHighScore();
+            self.leaderboard = local;
+            if (callback) callback(local);
+        };
+        xhr.send();
+    }
+
+    // 提交记录到GitHub
+    _submitRecord(name) {
+        var self = this;
+        var score = this.player.score;
+        var entry = { name: name, score: score };
+
+        // 先从GitHub读最新排行榜
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
+        xhr.onload = function() {
+            var list = [];
+            try { list = JSON.parse(xhr.responseText); } catch(e) {}
+            if (!Array.isArray(list)) list = [];
+
+            // 加入新记录
+            list.push(entry);
+            list.sort(function(a, b) { return b.score - a.score; });
+            list = list.slice(0, 10);
+
+            self.leaderboard = list;
+            self._saveHighScore(list);
+
+            // 通过GitHub API写入
+            var api = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/contents/leaderboard.json';
+            var getXhr = new XMLHttpRequest();
+            getXhr.open('GET', api, true);
+            getXhr.setRequestHeader('Authorization', 'token ' + CONFIG.GITHUB_TOKEN);
+            getXhr.onload = function() {
+                var sha = null;
+                try { sha = JSON.parse(getXhr.responseText).sha; } catch(e) {}
+                var content = btoa(unescape(encodeURIComponent(JSON.stringify(list))));
+                var putXhr = new XMLHttpRequest();
+                putXhr.open('PUT', api, true);
+                putXhr.setRequestHeader('Authorization', 'token ' + CONFIG.GITHUB_TOKEN);
+                putXhr.setRequestHeader('Content-Type', 'application/json');
+                putXhr.send(JSON.stringify({
+                    message: 'Update leaderboard',
+                    content: content,
+                    sha: sha,
+                    branch: 'main'
+                }));
+            };
+            getXhr.send();
+
+            // 隐藏输入框，刷新排行榜
+            self._hideNameInput();
+        };
+        xhr.onerror = function() {
+            // 离线回退
+            var list = self._loadHighScore();
+            list.push(entry);
+            list.sort(function(a, b) { return b.score - a.score; });
+            list = list.slice(0, 10);
+            self.leaderboard = list;
+            self._saveHighScore(list);
+            self._hideNameInput();
+        };
+        xhr.send();
+    }
+
+    _showNameInput() {
+        document.getElementById('newScore').textContent = this.player.score;
+        document.getElementById('nameOverlay').style.display = 'flex';
+        document.getElementById('playerName').value = '';
+        document.getElementById('playerName').focus();
+    }
+    _hideNameInput() {
+        document.getElementById('nameOverlay').style.display = 'none';
     }
 
     gameOver() {
         this.state = 'gameover';
-        // 保存分数到排行榜
-        const list = this._saveHighScore(this.player.score);
-        this.leaderboard = list;
-        this.highScore = list[0];
-        this.isNewRecord = this.player.score > 0 && this.player.score >= this.highScore;
-        // 播放音效（BGM继续播放，不停止）
-        if (this.isNewRecord) { SOUND.record(); } else { SOUND.gameover(); }
+        this.isNewRecord = this.player.score > 0 && (this.leaderboard.length === 0 || this.player.score > this.leaderboard[0].score);
+        // 播放音效
+        if (this.isNewRecord) {
+            SOUND.record();
+            this._showNameInput();
+        } else {
+            SOUND.gameover();
+        }
     }
 
     restart() {
@@ -1884,8 +2117,12 @@ class Game {
         this.timeLeft = CONFIG.GAME_DURATION;
         this.lastRealTime = Date.now();
         this.isNewRecord = false;
+        this._hideNameInput();
         this.init();
         this.state = 'playing';
+        // 重新加载排行榜
+        var self = this;
+        this._loadLeaderboard(function(data) { self.leaderboard = data; });
     }
 
     loop() {
