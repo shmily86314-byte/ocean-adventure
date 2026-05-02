@@ -1935,12 +1935,17 @@ class Game {
             ctx.fillStyle = 'rgba(0,0,0,0.75)';
             ctx.fillRect(0, 0, w, this.h);
 
-            // 新纪录庆祝
+            // 庆祝文字
             if (this.isNewRecord) {
                 ctx.fillStyle = '#FFD700';
                 ctx.font = 'bold 40px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText('\u{1F389} 新纪录！ \u{1F389}', w / 2, this.h / 2 - 100);
+                ctx.fillText('\u{1F451} 新纪录！ \u{1F451}', w / 2, this.h / 2 - 100);
+            } else if (this.isTop10) {
+                ctx.fillStyle = '#8AB4F8';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('\u{1F3C6} 进入前十！', w / 2, this.h / 2 - 100);
             }
 
             ctx.fillStyle = '#FFF';
@@ -2111,11 +2116,28 @@ class Game {
 
     gameOver() {
         this.state = 'gameover';
-        this.isNewRecord = this.player.score > 0 && (this.leaderboard.length === 0 || this.player.score > this.leaderboard[0].score);
+        // 检查是否进入前十
+        var score = this.player.score;
+        var lb = this.leaderboard || [];
+        var isHighScore = score > 0;
+        var isTop10 = false;
+        if (lb.length < 10) {
+            isTop10 = isHighScore;
+        } else {
+            // 排行榜已满10人，需要比第10名高
+            var last = lb[lb.length - 1];
+            isTop10 = isHighScore && score > last.score;
+        }
+        this.isNewRecord = isTop10 && (lb.length === 0 || score > lb[0].score);
+        this.isTop10 = isTop10;
         // 播放音效
-        if (this.isNewRecord) {
+        if (isTop10) {
             SOUND.record();
-            this._showNameInput();
+            if (this.isNewRecord) {
+                this._showNameInput(); // 冠军要输入名字
+            } else {
+                this._showNameInput(); // 前十也要输入名字
+            }
         } else {
             SOUND.gameover();
         }
