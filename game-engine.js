@@ -2203,7 +2203,7 @@ class Game {
             self._hideNameInput();
         }
 
-        tryFetchCloud();
+        tryAPIFirst();
     }
 
     // 同步分数到云端（最佳努力，CORS可能导致失败）
