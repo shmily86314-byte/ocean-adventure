@@ -2140,7 +2140,7 @@ class Game {
         
         // 方式1: fetch 直接触发GitHub Actions (CORS可能限制)
         try {
-            var url = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/lb.yml/dispatches';
+            var url = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/sync.yml/dispatches';
             var body = JSON.stringify({ ref: 'main', inputs: { name: name, score: score } });
             
             // 尝试 Content-Type: text/plain + token在URL（CORS简单请求）
