@@ -54,8 +54,9 @@ const CONFIG = {
     INVINCIBLE: 90,
     DRAG: 0.92,
     GAME_DURATION: 60,
-    // 跨设备排行榜（jsDelivr CDN读取，国内可用）
+    // 跨设备排行榜（优先GitHub API直达最新数据）
     GITHUB_REPO: 'shmily86314-byte/ocean-adventure',
+    LEADERBOARD_API: 'https://api.github.com/repos/shmily86314-byte/ocean-adventure/contents/leaderboard.json',
     LEADERBOARD_CDN: 'https://cdn.jsdelivr.net/gh/shmily86314-byte/ocean-adventure@main/leaderboard.json',
     LEADERBOARD_RAW: 'https://raw.githubusercontent.com/shmily86314-byte/ocean-adventure/main/leaderboard.json',
 };
@@ -2055,24 +2056,79 @@ class Game {
         var local = self._loadHighScore();
         self.leaderboard = local;
 
-        // 从CDN读取在线排行榜（合并到本地数据中）
-        var urls = [CONFIG.LEADERBOARD_CDN, CONFIG.LEADERBOARD_RAW];
-        var urlIdx = 0;
-        function tryFetch() {
-            if (urlIdx >= urls.length) {
-                if (callback) callback(self.leaderboard);
-                return;
-            }
+        // 读取优先级: GitHub API(最新数据) → CDN(国内加速) → raw(备选)
+        var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
+        
+        function tryFetch(url, isApi) {
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', urls[urlIdx] + '?' + Date.now(), true);
+            xhr.open('GET', url + '?' + Date.now(), true);
+            if (isApi) {
+                xhr.setRequestHeader('Authorization', 'token ' + token);
+                xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+            }
+            xhr.onload = function() {
+                try {
+                    var remote = isApi
+                        ? JSON.parse(atob(JSON.parse(xhr.responseText).content))
+                        : JSON.parse(xhr.responseText);
+                    if (Array.isArray(remote)) {
+                        var merged = self._mergeLeaderboard(local, remote);
+                        self.leaderboard = merged;
+                        self._saveHighScore(merged);
+                        if (callback) callback(merged);
+                        return;
+                    }
+                } catch(e) {}
+                // API失败，尝试CDN
+                tryCDN();
+            };
+            xhr.onerror = function() { isApi ? tryCDN() : tryRaw(); };
+            xhr.send();
+        }
+        
+        function tryCDN() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', CONFIG.LEADERBOARD_CDN + '?' + Date.now(), true);
             xhr.onload = function() {
                 try {
                     var remote = JSON.parse(xhr.responseText);
                     if (Array.isArray(remote)) {
-                        // 合并本地和远程数据
                         var merged = self._mergeLeaderboard(local, remote);
                         self.leaderboard = merged;
                         self._saveHighScore(merged);
+                        if (callback) callback(merged);
+                        return;
+                    }
+                } catch(e) {}
+                tryRaw();
+            };
+            xhr.onerror = function() { tryRaw(); };
+            xhr.send();
+        }
+        
+        function tryRaw() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
+            xhr.onload = function() {
+                try {
+                    var remote = JSON.parse(xhr.responseText);
+                    if (Array.isArray(remote)) {
+                        var merged = self._mergeLeaderboard(local, remote);
+                        self.leaderboard = merged;
+                        self._saveHighScore(merged);
+                        if (callback) callback(merged);
+                        return;
+                    }
+                } catch(e) {}
+                if (callback) callback(local);
+            };
+            xhr.onerror = function() { if (callback) callback(local); };
+            xhr.send();
+        }
+        
+        // 从GitHub API开始（最新数据无缓存）
+        tryFetch(CONFIG.LEADERBOARD_API, true);
+    }                        self._saveHighScore(merged);
                         if (callback) callback(merged);
                         return;
                     }
@@ -2093,17 +2149,29 @@ class Game {
         var entry = { name: name, score: this.player.score };
         var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
 
-        // 先从云端(CDN/raw)获取最新排行榜
-        var urls = [CONFIG.LEADERBOARD_CDN, CONFIG.LEADERBOARD_RAW];
-        var urlIdx = 0;
-        function tryFetchCloud() {
-            if (urlIdx >= urls.length) {
-                // 云端全挂，用本地数据
-                finishMerge(self._loadHighScore());
-                return;
-            }
+        // 优先从GitHub API获取最新排行榜（无缓存直达最新）
+        function tryAPIFirst() {
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', urls[urlIdx] + '?' + Date.now(), true);
+            xhr.open('GET', CONFIG.LEADERBOARD_API + '?' + Date.now(), true);
+            xhr.setRequestHeader('Authorization', 'token ' + token);
+            xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+            xhr.onload = function() {
+                try {
+                    var d = JSON.parse(atob(JSON.parse(xhr.responseText).content));
+                    if (Array.isArray(d)) {
+                        finishMerge(self._mergeLeaderboard(self._loadHighScore(), d));
+                        return;
+                    }
+                } catch(e) {}
+                tryCDN();
+            };
+            xhr.onerror = function() { tryCDN(); };
+            xhr.send();
+        }
+        
+        function tryCDN() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', CONFIG.LEADERBOARD_CDN + '?' + Date.now(), true);
             xhr.onload = function() {
                 try {
                     var d = JSON.parse(xhr.responseText);
@@ -2112,9 +2180,26 @@ class Game {
                         return;
                     }
                 } catch(e) {}
-                urlIdx++; tryFetchCloud();
+                tryRaw();
             };
-            xhr.onerror = function() { urlIdx++; tryFetchCloud(); };
+            xhr.onerror = function() { tryRaw(); };
+            xhr.send();
+        }
+        
+        function tryRaw() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
+            xhr.onload = function() {
+                try {
+                    var d = JSON.parse(xhr.responseText);
+                    if (Array.isArray(d)) {
+                        finishMerge(self._mergeLeaderboard(self._loadHighScore(), d));
+                        return;
+                    }
+                } catch(e) {}
+                finishMerge(self._loadHighScore());
+            };
+            xhr.onerror = function() { finishMerge(self._loadHighScore()); };
             xhr.send();
         }
 
