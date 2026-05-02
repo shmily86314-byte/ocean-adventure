@@ -50,6 +50,18 @@
 <body>
     <canvas id="gameCanvas"></canvas>
     <div id="errorMsg"></div>
+
+    <!-- 新纪录名称输入浮层 -->
+    <div id="nameOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:100;display:none;align-items:center;justify-content:center;flex-direction:column">
+        <div style="background:linear-gradient(135deg,#1a3a6a,#0d1f3f);padding:30px 35px;border-radius:16px;border:2px solid #FFD700;text-align:center;max-width:85%">
+            <div style="font:bold 28px Arial;color:#FFD700;margin-bottom:8px">🎉 新纪录！</div>
+            <div style="font:15px Arial;color:#CCC;margin-bottom:20px">得分：<span id="newScore" style="color:#FFD700;font-weight:bold"></span></div>
+            <div style="font:14px Arial;color:#AAA;margin-bottom:10px">输入你的大名：</div>
+            <input id="playerName" type="text" maxlength="8" placeholder="输入名字" style="width:200px;padding:10px 14px;font:16px Arial;border:2px solid #FFD700;border-radius:8px;background:#0a1a30;color:#FFF;text-align:center;outline:none;margin-bottom:16px">
+            <br>
+            <button id="submitBtn" style="background:#FFD700;color:#000;border:none;padding:10px 40px;font:bold 16px Arial;border-radius:8px;cursor:pointer">提交</button>
+        </div>
+    </div>
     <script src="game-engine.js"></script>
 </body>
 </html>
