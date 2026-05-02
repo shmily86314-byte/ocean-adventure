@@ -1973,14 +1973,14 @@ class Game {
             ctx.fillText('游戏结束', w / 2, this.h / 2 - 55);
 
             // 当前得分
-            ctx.font = '20px Arial';
             ctx.fillStyle = this.isNewRecord ? '#FFD700' : '#FFF';
+            ctx.font = '20px Arial,"Microsoft YaHei",sans-serif';
             ctx.fillText('得分: ' + this.player.score, w / 2, this.h / 2 - 15);
 
             // 排行榜（左对齐）
-            ctx.font = '15px Arial';
-            ctx.fillStyle = '#AAA';
             ctx.textAlign = 'left';
+            ctx.fillStyle = '#888';
+            ctx.font = '15px Arial,"Microsoft YaHei",sans-serif';
             ctx.fillText('-- 排行榜 --', w / 2 - 80, this.h / 2 + 15);
             const list = this.leaderboard || [];
             const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}']; // 🥇🥈🥉
@@ -1991,14 +1991,14 @@ class Game {
                 var score = entry.score || entry;
                 var isCurrent = score === this.player.score;
                 ctx.fillStyle = isCurrent && this.isNewRecord ? '#FFD700' : '#DDD';
-                ctx.font = isCurrent && this.isNewRecord ? 'bold 15px Arial' : '14px Arial';
+                ctx.font = isCurrent && this.isNewRecord ? 'bold 15px Arial,"Microsoft YaHei",sans-serif' : '14px Arial,"Microsoft YaHei",sans-serif';
                 var prefix = i < 3 ? medals[i] + ' ' : (i+1) + '. ';
                 ctx.fillText(prefix + name + ' - ' + score, w / 2 - 80, y);
             }
             ctx.textAlign = 'center';
 
             // 署名
-            ctx.font = '11px Arial';
+            ctx.font = '11px Arial,"Microsoft YaHei",sans-serif';
             ctx.fillStyle = 'rgba(255,255,255,0.25)';
             ctx.fillText('制作人：陈军睿', w / 2, this.h / 2 + 185);
 
