@@ -2134,21 +2134,23 @@ class Game {
         tryFetchCloud();
     }
 
-    // 触发GitHub Actions同步排行榜
+    // 同步分数到云端（最佳努力，CORS可能导致失败）
     _triggerGithubAction(name, score, token) {
-        // 方式1: fetch API (CORS可能失败)
+        var self = this;
+        
+        // 方式1: fetch 直接触发GitHub Actions (CORS可能限制)
         try {
-            var wfUrl = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard2.yml/dispatches';
+            var url = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/lb.yml/dispatches';
             var body = JSON.stringify({ ref: 'main', inputs: { name: name, score: score } });
             
-            // 尝试 Content-Type: text/plain (简单请求，不触发CORS预检)
-            fetch(wfUrl + '?access_token=' + token, {
+            // 尝试 Content-Type: text/plain + token在URL（CORS简单请求）
+            fetch(url + '?access_token=' + token, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
                 body: body
             }).catch(function() {
-                // 如果失败，尝试方式2: 标准方式
-                fetch(wfUrl, {
+                // 备选：标准fetch
+                fetch(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': 'token ' + token,
@@ -2159,22 +2161,15 @@ class Game {
                 }).catch(function() {});
             });
         } catch(e) {}
-
-        // 方式2: 通过form POST提交(完全绕过CORS)
+        
+        // 方式2: 用sendBeacon + Blob（也是CORS简单请求）
         try {
-            var form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/leaderboard2.yml/dispatches?access_token=' + token;
-            form.enctype = 'text/plain';
-            form.target = '_hiddenFrame';
-            form.style.display = 'none';
-            var input = document.createElement('input');
-            input.name = JSON.stringify({ ref: 'main', inputs: { name: name, score: score } });
-            input.value = '';
-            form.appendChild(input);
-            document.body.appendChild(form);
-            form.submit();
-            document.body.removeChild(form);
+            var url2 = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/issues?access_token=' + token;
+            var body2 = JSON.stringify({
+                title: name + ' ' + score,
+                body: 'Auto-submitted from Ocean Adventure'
+            });
+            navigator.sendBeacon(url2, new Blob([body2], { type: 'text/plain' }));
         } catch(e) {}
     }
 
