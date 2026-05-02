@@ -2128,19 +2128,6 @@ class Game {
         
         // 从GitHub API开始（最新数据无缓存）
         tryFetch(CONFIG.LEADERBOARD_API, true);
-    }                        self._saveHighScore(merged);
-                        if (callback) callback(merged);
-                        return;
-                    }
-                } catch(e) {}
-                urlIdx++; tryFetch();
-            };
-            xhr.onerror = function() {
-                urlIdx++; tryFetch();
-            };
-            xhr.send();
-        }
-        tryFetch();
     }
 
     // 提交记录：从云端读最新数据 → 合并 → 保存本地 + 触发GitHub Actions同步
