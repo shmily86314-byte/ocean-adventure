@@ -1,4 +1,4 @@
-name: Update Leaderboard
+name: Leaderboard
 
 on:
   workflow_dispatch:
@@ -20,37 +20,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update leaderboard
+      - name: Process
         env:
-          PLAYER_NAME: ${{ github.event.inputs.name }}
-          PLAYER_SCORE: ${{ github.event.inputs.score }}
+          PN: ${{ github.event.inputs.name }}
+          PS: ${{ github.event.inputs.score }}
         run: |
-          # 读取当前排行榜
-          if [ -f leaderboard.json ]; then
-            cat leaderboard.json
-          else
-            echo '[]' > leaderboard.json
-          fi
-
-          # 用Python处理
+          if [ -f leaderboard.json ]; then cat leaderboard.json; else echo '[]' > leaderboard.json; fi
           python3 -c "
-import json, os
+import json,os
 with open('leaderboard.json') as f:
-    try: data = json.load(f)
-    except: data = []
-if not isinstance(data, list): data = []
-data.append({'name': os.environ['PLAYER_NAME'], 'score': int(os.environ['PLAYER_SCORE'])})
-data.sort(key=lambda x: x.get('score',0), reverse=True)
-data = data[:10]
-with open('leaderboard.json','w') as f:
-    json.dump(data, f, ensure_ascii=False)
-print(f'OK: {len(data)} entries')
+    try: d=json.load(f)
+    except: d=[]
+if not isinstance(d,list): d=[]
+d.append({'name':os.environ['PN'],'score':int(os.environ['PS'])})
+d.sort(key=lambda x:x.get('score',0),reverse=True)
+d=d[:10]
+json.dump(d,open('leaderboard.json','w'),ensure_ascii=False)
 "
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - run: |
+          git config user.name "bot"
+          git config user.email "bot@noreply"
           git add leaderboard.json
-          git diff --staged --quiet || git commit -m "Update leaderboard"
+          git diff --staged --quiet || git commit -m "lb update"
           git push
