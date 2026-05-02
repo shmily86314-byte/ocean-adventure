@@ -2106,6 +2106,10 @@ class Game {
 
     _showNameInput() {
         document.getElementById('newScore').textContent = this.player.score;
+        var title = document.querySelector('#nameOverlay div div:first-child');
+        if (title) {
+            title.textContent = this.isNewRecord ? '\u{1F451} 新纪录！' : '\u{1F3C6} 进入前十！';
+        }
         document.getElementById('nameOverlay').style.display = 'flex';
         document.getElementById('playerName').value = '';
         document.getElementById('playerName').focus();
@@ -2116,29 +2120,35 @@ class Game {
 
     gameOver() {
         this.state = 'gameover';
-        // 检查是否进入前十
-        var score = this.player.score;
-        var lb = this.leaderboard || [];
-        var isHighScore = score > 0;
-        var isTop10 = false;
-        if (lb.length < 10) {
-            isTop10 = isHighScore;
-        } else {
-            // 排行榜已满10人，需要比第10名高
-            var last = lb[lb.length - 1];
-            isTop10 = isHighScore && score > last.score;
-        }
-        this.isNewRecord = isTop10 && (lb.length === 0 || score > lb[0].score);
-        this.isTop10 = isTop10;
-        // 播放音效
-        if (isTop10) {
-            SOUND.record();
-            if (this.isNewRecord) {
-                this._showNameInput(); // 冠军要输入名字
+        try {
+            var score = this.player.score;
+            var lb = this.leaderboard || [];
+            
+            var isTop10 = false;
+            if (score > 0) {
+                if (lb.length < 10) {
+                    isTop10 = true;
+                } else {
+                    var last = lb[lb.length - 1];
+                    isTop10 = score > (last.score || last);
+                }
+                this.isNewRecord = lb.length === 0 || score > (lb[0].score || lb[0]);
             } else {
-                this._showNameInput(); // 前十也要输入名字
+                this.isNewRecord = false;
             }
-        } else {
+            this.isTop10 = isTop10;
+            
+            if (isTop10) {
+                SOUND.record();
+                var self = this;
+                setTimeout(function() {
+                    try { self._showNameInput(); } catch(e) { console.log('name input error', e); }
+                }, 50);
+            } else {
+                SOUND.gameover();
+            }
+        } catch(e) {
+            console.log('gameOver error', e);
             SOUND.gameover();
         }
     }
