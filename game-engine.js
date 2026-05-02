@@ -54,11 +54,9 @@ const CONFIG = {
     INVINCIBLE: 90,
     DRAG: 0.92,
     GAME_DURATION: 60,
-    // 跨设备排行榜（优先GitHub API直达最新数据）
-    GITHUB_REPO: 'shmily86314-byte/ocean-adventure',
-    LEADERBOARD_API: 'https://api.github.com/repos/shmily86314-byte/ocean-adventure/contents/leaderboard.json',
-    LEADERBOARD_CDN: 'https://cdn.jsdelivr.net/gh/shmily86314-byte/ocean-adventure@main/leaderboard.json',
-    LEADERBOARD_RAW: 'https://raw.githubusercontent.com/shmily86314-byte/ocean-adventure/main/leaderboard.json',
+    // Supabase线上数据库排行榜
+    SUPABASE_URL: 'https://dzueulamxiqebhfxicif.supabase.co',
+    SUPABASE_KEY: 'sb_publishable_nRRS2QxA-FHsyRgQ1UZODQ_NZgTibkc',
 };
 
 const EVO = [
@@ -1417,14 +1415,14 @@ class Game {
         // 倒计时（初始状态不启动）
         this.timeLeft = CONFIG.GAME_DURATION;
         this.lastRealTime = Date.now();
-        this.state = 'menu'; // 初始为菜单状态
-        // 排行榜
-        this.leaderboard = this._loadHighScore();
+        this.state = 'menu';
+        // 排行榜（从Supabase数据库读取，不做本地保存）
+        this.leaderboard = [];
         this.isNewRecord = false;
         this._resetTapCount = 0;
         var self = this;
-        // 异步加载GitHub排行榜
-        this._loadLeaderboard(function(data) { self.leaderboard = data; });
+        // 异步从Supabase加载排行榜
+        this._fetchLeaderboard(function(data) { self.leaderboard = data; });
         // 绑定名字提交按钮
         setTimeout(function() {
             var btn = document.getElementById('submitBtn');
@@ -2009,247 +2007,46 @@ class Game {
         }
     }
 
-    // 排行榜系统（跨设备）
-    _loadHighScore() {
-        try {
-            var data = localStorage.getItem('fishGameLeaderboard');
-            if (data) {
-                var list = JSON.parse(data);
-                // 兼容旧格式（纯数字数组）
-                if (list.length > 0 && typeof list[0] === 'number') {
-                    list = list.map(function(s) { return { name: '玩家', score: s }; });
-                    localStorage.setItem('fishGameLeaderboard', JSON.stringify(list));
-                }
-                return list;
-            }
-        } catch(e) {}
-        return [];
-    }
-    _saveHighScore(list) {
-        try {
-            localStorage.setItem('fishGameLeaderboard', JSON.stringify(list));
-        } catch(e) {}
-    }
-
-    // 从GitHub加载排行榜
-    // 合并两个排行榜（取并集，保留最高分）
-    _mergeLeaderboard(local, remote) {
-        var map = {};
-        (local || []).forEach(function(e) { if (e && e.name) map[e.name] = e.score; });
-        (remote || []).forEach(function(e) {
-            if (e && e.name) {
-                if (map[e.name] === undefined || e.score > map[e.name]) {
-                    map[e.name] = e.score;
-                }
-            }
-        });
-        var result = [];
-        for (var name in map) {
-            result.push({ name: name, score: map[name] });
-        }
-        result.sort(function(a, b) { return b.score - a.score; });
-        return result.slice(0, 10);
-    }
-
-    _loadLeaderboard(callback) {
+    // 排行榜系统 — 从Supabase数据库直接读写（不做本地保存，不做合并）
+    _fetchLeaderboard(callback) {
         var self = this;
-        var local = self._loadHighScore();
-        self.leaderboard = local;
-
-        // 读取优先级: GitHub API(最新数据) → CDN(国内加速) → raw(备选)
-        var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
-        
-        function tryFetch(url, isApi) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', url + '?' + Date.now(), true);
-            if (isApi) {
-                xhr.setRequestHeader('Authorization', 'token ' + token);
-                xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
-            }
-            xhr.onload = function() {
-                try {
-                    var remote = isApi
-                        ? JSON.parse(atob(JSON.parse(xhr.responseText).content))
-                        : JSON.parse(xhr.responseText);
-                    if (Array.isArray(remote)) {
-                        var merged = self._mergeLeaderboard(local, remote);
-                        self.leaderboard = merged;
-                        self._saveHighScore(merged);
-                        if (callback) callback(merged);
-                        return;
-                    }
-                } catch(e) {}
-                // API失败，尝试CDN
-                tryCDN();
-            };
-            xhr.onerror = function() { isApi ? tryCDN() : tryRaw(); };
-            xhr.send();
-        }
-        
-        function tryCDN() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', CONFIG.LEADERBOARD_CDN + '?' + Date.now(), true);
-            xhr.onload = function() {
-                try {
-                    var remote = JSON.parse(xhr.responseText);
-                    if (Array.isArray(remote)) {
-                        var merged = self._mergeLeaderboard(local, remote);
-                        self.leaderboard = merged;
-                        self._saveHighScore(merged);
-                        if (callback) callback(merged);
-                        return;
-                    }
-                } catch(e) {}
-                tryRaw();
-            };
-            xhr.onerror = function() { tryRaw(); };
-            xhr.send();
-        }
-        
-        function tryRaw() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
-            xhr.onload = function() {
-                try {
-                    var remote = JSON.parse(xhr.responseText);
-                    if (Array.isArray(remote)) {
-                        var merged = self._mergeLeaderboard(local, remote);
-                        self.leaderboard = merged;
-                        self._saveHighScore(merged);
-                        if (callback) callback(merged);
-                        return;
-                    }
-                } catch(e) {}
-                if (callback) callback(local);
-            };
-            xhr.onerror = function() { if (callback) callback(local); };
-            xhr.send();
-        }
-        
-        // 从GitHub API开始（最新数据无缓存）
-        tryFetch(CONFIG.LEADERBOARD_API, true);
+        var url = CONFIG.SUPABASE_URL + '/rest/v1/leaderboard?apikey=' + CONFIG.SUPABASE_KEY + '&order=score.desc&limit=10';
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.onload = function() {
+            try {
+                var data = JSON.parse(xhr.responseText);
+                if (Array.isArray(data)) {
+                    self.leaderboard = data;
+                    if (callback) callback(data);
+                    return;
+                }
+            } catch(e) {}
+            if (callback) callback([]);
+        };
+        xhr.onerror = function() { if (callback) callback([]); };
+        xhr.send();
     }
 
-    // 提交记录：从云端读最新数据 → 合并 → 保存本地 + 触发GitHub Actions同步
+    // 提交分数到Supabase数据库（不做本地保存、不做合并）
     _submitRecord(name) {
         var self = this;
-        var entry = { name: name, score: this.player.score };
-        var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
-
-        // 优先从GitHub API获取最新排行榜（无缓存直达最新）
-        function tryAPIFirst() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', CONFIG.LEADERBOARD_API + '?' + Date.now(), true);
-            xhr.setRequestHeader('Authorization', 'token ' + token);
-            xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
-            xhr.onload = function() {
-                try {
-                    var d = JSON.parse(atob(JSON.parse(xhr.responseText).content));
-                    if (Array.isArray(d)) {
-                        finishMerge(self._mergeLeaderboard(self._loadHighScore(), d));
-                        return;
-                    }
-                } catch(e) {}
-                tryCDN();
-            };
-            xhr.onerror = function() { tryCDN(); };
-            xhr.send();
-        }
-        
-        function tryCDN() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', CONFIG.LEADERBOARD_CDN + '?' + Date.now(), true);
-            xhr.onload = function() {
-                try {
-                    var d = JSON.parse(xhr.responseText);
-                    if (Array.isArray(d)) {
-                        finishMerge(self._mergeLeaderboard(self._loadHighScore(), d));
-                        return;
-                    }
-                } catch(e) {}
-                tryRaw();
-            };
-            xhr.onerror = function() { tryRaw(); };
-            xhr.send();
-        }
-        
-        function tryRaw() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', CONFIG.LEADERBOARD_RAW + '?' + Date.now(), true);
-            xhr.onload = function() {
-                try {
-                    var d = JSON.parse(xhr.responseText);
-                    if (Array.isArray(d)) {
-                        finishMerge(self._mergeLeaderboard(self._loadHighScore(), d));
-                        return;
-                    }
-                } catch(e) {}
-                finishMerge(self._loadHighScore());
-            };
-            xhr.onerror = function() { finishMerge(self._loadHighScore()); };
-            xhr.send();
-        }
-
-        function finishMerge(baseList) {
-            baseList.push(entry);
-            baseList.sort(function(a, b) { return b.score - a.score; });
-            baseList = baseList.slice(0, 10);
-            self.leaderboard = baseList;
-            self._saveHighScore(baseList);
-
-            // 触发GitHub Actions同步
-            self._triggerGithubAction(name, entry.score, token);
-
-            self._hideNameInput();
-        }
-
-        tryAPIFirst();
-    }
-
-    // 同步分数到云端（通过GitHub Issues API，CORS友好）
-    _triggerGithubAction(name, score, token) {
-        // 创建issue: title="score:NAME:SCORE" → Actions workflow处理并关闭
-        var body = JSON.stringify({ title: 'score:' + name + ':' + score, body: 'auto' });
-        var url = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/issues';
-        
-        // 方式1: fetch - token在URL中，Content-Type: text/plain (CORS简单请求)
-        try {
-            fetch(url + '?access_token=' + token, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: body
-            }).catch(function() {});
-        } catch(e) {}
-        
-        // 方式2: sendBeacon (最CORS友好的异步POST)
-        try {
-            navigator.sendBeacon(url + '?access_token=' + token, new Blob([body], { type: 'text/plain' }));
-        } catch(e) {}
+        var score = this.player.score;
+        var url = CONFIG.SUPABASE_URL + '/rest/v1/leaderboard?apikey=' + CONFIG.SUPABASE_KEY;
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            self._fetchLeaderboard(function(data) { self.leaderboard = data; });
+        };
+        xhr.send(JSON.stringify({ name: name, score: score }));
+        self._hideNameInput();
     }
 
     // 清空排行榜
+    // 重置排行榜（本地清空，数据库清空需要额外SQL权限）
     _clearLeaderboard() {
         this.leaderboard = [];
-        this._saveHighScore([]);
-        try {
-            var token = 'ghp_' + '9KHxJ0eUgxSdCrIlPhG7jo0Rpmbi3m0zNld8';
-            var h = new Headers();
-            h.append('Authorization', 'token ' + token);
-            h.append('Content-Type', 'application/json');
-            fetch('https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/contents/leaderboard.json', {
-                method: 'GET', headers: h
-            }).then(function(r) { return r.json(); }).then(function(d) {
-                fetch('https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/contents/leaderboard.json', {
-                    method: 'PUT', headers: h,
-                    body: JSON.stringify({
-                        message: 'Reset leaderboard',
-                        content: btoa(unescape(encodeURIComponent(JSON.stringify([])))),
-                        sha: d.sha,
-                        branch: 'main'
-                    })
-                }).catch(function(){});
-            }).catch(function(){});
-        } catch(e) {}
     }
 
     _showNameInput() {
@@ -2313,7 +2110,7 @@ class Game {
         this.state = 'playing';
         // 重新加载排行榜
         var self = this;
-        this._loadLeaderboard(function(data) { self.leaderboard = data; });
+        this._fetchLeaderboard(function(data) { self.leaderboard = data; });
     }
 
     loop() {
