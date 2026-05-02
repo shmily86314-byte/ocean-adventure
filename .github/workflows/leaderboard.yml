@@ -20,7 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read and update leaderboard
+      - name: Update leaderboard
+        env:
+          PLAYER_NAME: ${{ github.event.inputs.name }}
+          PLAYER_SCORE: ${{ github.event.inputs.score }}
         run: |
           # 读取当前排行榜
           if [ -f leaderboard.json ]; then
@@ -29,43 +32,25 @@ jobs:
             echo '[]' > leaderboard.json
           fi
 
-          # 使用Python处理
-          python3 << 'PYEOF'
-import json
-
-# 读取当前数据
-with open('leaderboard.json', 'r') as f:
-    try:
-        data = json.load(f)
-    except:
-        data = []
-
-# 确保数据格式正确
-if not isinstance(data, list):
-    data = []
-
-# 新记录
-new_entry = {
-    "name": "${{ github.event.inputs.name }}",
-    "score": ${{ github.event.inputs.score }}
-}
-
-# 合并
-data.append(new_entry)
-data.sort(key=lambda x: x.get('score', 0), reverse=True)
+          # 用Python处理
+          python3 -c "
+import json, os
+with open('leaderboard.json') as f:
+    try: data = json.load(f)
+    except: data = []
+if not isinstance(data, list): data = []
+data.append({'name': os.environ['PLAYER_NAME'], 'score': int(os.environ['PLAYER_SCORE'])})
+data.sort(key=lambda x: x.get('score',0), reverse=True)
 data = data[:10]
-
-# 写入
-with open('leaderboard.json', 'w') as f:
+with open('leaderboard.json','w') as f:
     json.dump(data, f, ensure_ascii=False)
-
-print(f"Leaderboard updated: {len(data)} entries")
-PYEOF
+print(f'OK: {len(data)} entries')
+"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add leaderboard.json
-          git diff --staged --quiet || git commit -m "Update leaderboard (score: ${{ github.event.inputs.score }})"
+          git diff --staged --quiet || git commit -m "Update leaderboard"
           git push
