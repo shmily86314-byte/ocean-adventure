@@ -1837,6 +1837,11 @@ class Game {
             }
             ctx.textAlign = 'center';
 
+            // 署名
+            ctx.font = '11px Arial';
+            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            ctx.fillText('制作人：陈军睿', w / 2, this.h / 2 + 185);
+
             ctx.font = '15px Arial';
             ctx.fillStyle = '#AAA';
             ctx.fillText('点击屏幕重新开始', w / 2, this.h / 2 + 155);
