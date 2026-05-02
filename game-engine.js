@@ -2136,40 +2136,24 @@ class Game {
 
     // 同步分数到云端（最佳努力，CORS可能导致失败）
     _triggerGithubAction(name, score, token) {
-        var self = this;
+        // GitHub API要求inputs的值为字符串
+        var body = JSON.stringify({ ref: 'main', inputs: { name: name, score: String(score) } });
         
-        // 方式1: fetch 直接触发GitHub Actions (CORS可能限制)
+        // 方式1: fetch - Content-Type: text/plain (CORS简单请求，不触发预检)
         try {
             var url = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/sync.yml/dispatches';
-            var body = JSON.stringify({ ref: 'main', inputs: { name: name, score: score } });
-            
-            // 尝试 Content-Type: text/plain + token在URL（CORS简单请求）
+            // token在URL参数中，避免自定义Authorization头(CORS限制)
             fetch(url + '?access_token=' + token, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
                 body: body
-            }).catch(function() {
-                // 备选：标准fetch
-                fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'token ' + token,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/vnd.github.v3+json'
-                    },
-                    body: body
-                }).catch(function() {});
-            });
+            }).catch(function() {});
         } catch(e) {}
         
-        // 方式2: 用sendBeacon + Blob（也是CORS简单请求）
+        // 方式2: sendBeacon (CORS友好的异步POST)
         try {
-            var url2 = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/issues?access_token=' + token;
-            var body2 = JSON.stringify({
-                title: name + ' ' + score,
-                body: 'Auto-submitted from Ocean Adventure'
-            });
-            navigator.sendBeacon(url2, new Blob([body2], { type: 'text/plain' }));
+            var url2 = 'https://api.github.com/repos/' + CONFIG.GITHUB_REPO + '/actions/workflows/sync.yml/dispatches?access_token=' + token;
+            navigator.sendBeacon(url2, new Blob([body], { type: 'text/plain' }));
         } catch(e) {}
     }
 
