@@ -1614,7 +1614,7 @@ class Game {
             const d = vecDist(this.player, f);
             const cd = (this.player.size + f.size) * 0.5;
             if (d < cd && f.stage <= this.player.stage) {
-                if (this.player.eat(f)) { f.alive = false; this.player.vx *= 1.3; this.player.vy *= 1.3; }
+                if (this.player.eat(f)) { f.alive = false; }
             }
             if (d < cd + 10 && f.stage > this.player.stage) {
                 if (this.player.takeDamage(f)) { this.gameOver(); return; }
@@ -1888,6 +1888,12 @@ class Game {
                 ctx.font = '13px Arial';
                 ctx.fillText((i < 3 ? medals[i] : (i+1) + '.') + '  ' + (e.name||'玩家') + '  ' + e.score, w / 2, h * 0.76 + 25 + i * 20);
             }
+
+            // 重置排行榜按钮（点击5次触发）            
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.font = '10px Arial';
+            ctx.fillText('长按"制作人"5次重置排行榜', w / 2, h - 8);
 
             // 署名
             ctx.fillStyle = 'rgba(255,255,255,0.2)';
