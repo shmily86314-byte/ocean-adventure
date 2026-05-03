@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 微信分享卡片 -->
+    <meta property="og:title" content="AI编程心得 — 海洋冒险游戏开发实录">
+    <meta property="og:description" content="陈军睿通过AI工具实现的小游戏编程实例。从想法到上线，一个HTML5游戏的完整开发历程与心得">
+    <meta property="og:image" content="https://cdn.jsdelivr.net/gh/shmily86314-byte/ocean-adventure@main/assets/og_thumb.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="海洋冒险">
+    <title>AI编程心得 — 海洋冒险游戏开发实录</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0a0e1a;
+    color: #e0e4f0;
+    line-height: 1.8;
+}
+.hero {
+    background: linear-gradient(135deg, #0d1f3f 0%, #1a3a6a 50%, #0d1f3f 100%);
+    padding: 60px 20px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(255,215,0,0.06) 0%, transparent 60%),
+                radial-gradient(circle at 70% 50%, rgba(0,150,255,0.08) 0%, transparent 60%);
+}
+.hero h1 {
+    font-size: clamp(24px, 5vw, 42px);
+    color: #FFD700;
+    position: relative;
+    margin-bottom: 10px;
+}
+.hero .subtitle {
+    font-size: clamp(14px, 2.5vw, 20px);
+    color: #8AB4F8;
+    position: relative;
+}
+.hero .meta {
+    margin-top: 20px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.4);
+    position: relative;
+}
+.container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+}
+h2 {
+    font-size: 22px;
+    color: #FFD700;
+    margin: 40px 0 16px;
+    padding-left: 14px;
+    border-left: 3px solid #FFD700;
+}
+h3 {
+    font-size: 17px;
+    color: #8AB4F8;
+    margin: 24px 0 8px;
+}
+p {
+    margin-bottom: 16px;
+    color: #c8d0e0;
+}
+ul {
+    margin: 8px 0 20px 20px;
+    color: #c8d0e0;
+}
+li {
+    margin-bottom: 8px;
+}
+code {
+    background: rgba(255,255,255,0.08);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #7ec8e3;
+}
+.highlight-box {
+    background: linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,215,0,0.03));
+    border: 1px solid rgba(255,215,0,0.2);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 20px 0;
+}
+.highlight-box .label {
+    font-size: 12px;
+    color: #FFD700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+}
+.stat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+.stat-card .num {
+    font-size: 28px;
+    font-weight: bold;
+    color: #FFD700;
+}
+.stat-card .desc {
+    font-size: 12px;
+    color: #889;
+    margin-top: 4px;
+}
+.arch-diagram {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 20px 0;
+    font-size: 13px;
+    font-family: monospace;
+    white-space: pre;
+    overflow-x: auto;
+    color: #8AB4F8;
+    line-height: 1.6;
+}
+.timeline {
+    position: relative;
+    padding-left: 28px;
+    margin: 20px 0;
+}
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(255,215,0,0.2);
+}
+.timeline-item {
+    position: relative;
+    margin-bottom: 24px;
+}
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 6px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #FFD700;
+    border: 2px solid #0a0e1a;
+}
+.timeline-item .phase {
+    font-size: 12px;
+    color: #FFD700;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+.timeline-item h4 {
+    font-size: 15px;
+    color: #e0e4f0;
+    margin-bottom: 4px;
+}
+.timeline-item p {
+    font-size: 13px;
+    color: #889;
+    margin: 0;
+}
+.footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255,255,255,0.2);
+    font-size: 13px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: 40px;
+}
+@media (max-width: 480px) {
+    .container { padding: 20px 16px 60px; }
+    h2 { font-size: 18px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .arch-diagram { font-size: 11px; padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+    <h1>🐟 海洋冒险 · 从零到一的AI编程之旅</h1>
+    <div class="subtitle">—— 用AI工具从想法到产品，一个HTML5游戏的全过程</div>
+    <div class="meta">陈军睿 · 2026年5月</div>
+</div>
+
+<div class="container">
+
+    <!-- 项目概览 -->
+    <h2>📋 项目概览</h2>
+    <p>
+        《海洋冒险》是一个完全在浏览器中运行的HTML5小游戏。玩家控制一条小鱼，在60秒内不断吞噬比自己小的鱼来进化，
+        从小虾米开始，历经10个阶段成长为海洋霸主。项目采用AI辅助编程的方式完成，
+        从最初的代码编写、BUG修复、到后期部署、跨设备排行榜，全程由AI工具（WorkBuddy + Deepseek）辅助实现。
+    </p>
+
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="num">~2300</div>
+            <div class="desc">代码行数</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">10</div>
+            <div class="desc">进化阶段</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">11</div>
+            <div class="desc">精灵贴图</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">3</div>
+            <div class="desc">天开发周期</div>
+        </div>
+    </div>
+
+    <!-- 开发经历 -->
+    <h2>🚀 开发经历</h2>
+
+    <div class="timeline">
+        <div class="timeline-item">
+            <div class="phase">Phase 1 · 框架搭建</div>
+            <h4>用文本描述生成了完整游戏框架</h4>
+            <p>直接告诉AI "做一个海洋吞噬进化的游戏"，AI就生成了完整的Canvas游戏框架——包括鱼类的移动、碰撞检测、进化系统、AI对手等核心逻辑。</p>
+        </div>
+        <div class="timeline-item">
+            <div class="phase">Phase 2 · 界面美化</div>
+            <h4>AI生成写实海底精灵贴图</h4>
+            <p>利用AI绘图工具生成了10种海洋生物的写实精灵贴图，并编写程序自动去除背景、生成精灵动画帧。</p>
+        </div>
+        <div class="timeline-item">
+            <div class="phase">Phase 3 · Bug围剿</div>
+            <h4>游戏逻辑修复与性能优化</h4>
+            <p>修复了NPC鱼游不动、进化进度显示错误、音效冲突等一系列问题。最经典的BUG是变量命名冲突导致的NaN错误——"sp"同时被用作速度和精灵名称。</p>
+        </div>
+        <div class="timeline-item">
+            <div class="phase">Phase 4 · 部署上线</div>
+            <h4>GitHub Pages + CDN 发布</h4>
+            <p>通过GitHub Pages部署到公网，配置jsDelivr CDN加速国内访问，添加OG卡片实现微信分享。</p>
+        </div>
+        <div class="timeline-item">
+            <div class="phase">Phase 5 · 跨设备同步</div>
+            <h4>排行榜从本地走向云端</h4>
+            <p>先后尝试了GitHub Actions自动同步、Issues API跨域写入等多种方案，最终采用Supabase数据库实现稳定、实时的排行榜同步。</p>
+        </div>
+    </div>
+
+    <!-- 技术架构 -->
+    <h2>🏗️ 技术架构</h2>
+
+    <div class="arch-diagram">┌─────────────────────────────────────────────┐
+│           GitHub Pages (静态托管)              │
+│   index.html  +  game-engine.js  +  assets/   │
+├─────────────────────────────────────────────┤
+│               jsDelivr CDN                    │
+│          (国内加速 · 精灵图/数据)               │
+├─────────────────────────────────────────────┤
+│          Supabase 数据库（排行榜）              │
+│     REST API:  GET排行 / POST提交分数          │
+│     Row Level Security: 匿名读写              │
+├─────────────────────────────────────────────┤
+│         AI 开发工具链                         │
+│    WorkBuddy + Deepseek 全程辅助              │
+│    问题描述 → 代码生成 → 调试 → 部署          │
+└─────────────────────────────────────────────┘</div>
+
+    <!-- AI编程心得 -->
+    <h2>💡 AI编程心得</h2>
+
+    <div class="highlight-box">
+        <div class="label">核心感悟</div>
+        <p style="margin:0;font-style:italic;">
+            "AI编程不是让AI取代程序员，而是让一个人拥有一个全栈团队的能力。
+            从需求分析、代码实现、UI设计、运维部署到问题排查，AI都能参与。
+            关键在于——你知道该问什么，以及如何判断AI给出的答案是否靠谱。"
+        </p>
+    </div>
+
+    <h3>1. 描述能力就是编程能力</h3>
+    <p>
+        这次体会最深的是：<strong>能把需求描述得越清晰，AI输出的代码质量就越高。</strong>
+        写自然语言需求文档的能力，正在变成一种新的编程能力。
+        与其让AI猜你想做什么，不如把"怎么做"拆解清楚。例如：
+    </p>
+    <ul>
+        <li>"做一个海洋游戏" → 得到泛泛的框架</li>
+        <li>"做一个Canvas 2D游戏，玩家滑动控制一条鱼，60秒倒计时，吞噬比自己小的鱼进化，有10个进化阶段" → 得到一个可用的游戏</li>
+    </ul>
+
+    <h3>2. BUG修复是最能体现AI价值的场景</h3>
+    <p>
+        遇到诡异的BUG（比如所有NPC鱼都变成NaN），自己逐行排查可能需要半小时甚至更久，但AI可以：
+    </p>
+    <ul>
+        <li>快速定位问题根因（数据流追踪）</li>
+        <li>提供多种修复方案并分析利弊</li>
+        <li>一边修复一边解释原理，顺便学到新东西</li>
+    </ul>
+    <p>
+        这次遇到的"NaN鱼群"BUG，根源是一个数组中的字段名冲突（sp被重复赋值），AI从报错信息直指代码行，5分钟内修复。
+    </p>
+
+    <h3>3. 架构决策 AI 也能参与</h3>
+    <p>
+        跨设备排行榜是项目中最大的技术挑战。AI帮我分析了几种方案：
+    </p>
+    <ul>
+        <li>❌ GitHub Actions触发写入 — CORS限制，浏览器无法直接触发</li>
+        <li>❌ 多级CDN回退读取+合并 — 数据不一致，各设备不同步</li>
+        <li>❌ GitHub Issues API — CORS可行但会污染Issues页面</li>
+        <li>✅ <strong>Supabase 数据库 — 2个REST API调用搞定</strong></li>
+    </ul>
+    <p>
+        最终方案由AI推荐、我评估可行性后实施。整条链路从"数据写不进GitHub"到"一个API写入数据库"，代码量从200行降到10行。
+    </p>
+
+    <h3>4. AI的局限性 & 人不可替代的部分</h3>
+    <p>
+        AI并非万能，以下场景仍需人工判断：
+    </p>
+    <ul>
+        <li><strong>架构选型</strong> — AI可以提供方案对比，但技术选型需要理解业务场景和约束条件</li>
+        <li><strong>审美决策</strong> — 贴图效果好不好、UI配色是否协调，最终得人说了算</li>
+        <li><strong>安全审查</strong> — Token泄露风险、CORS配置、数据库权限，AI会给出方案但安全把关得自己来</li>
+        <li><strong>持续迭代方向</strong> — "下一步做什么"这个问题的答案需要产品思维，AI只能辅助</li>
+    </ul>
+
+    <!-- 数据盘点 -->
+    <h2>📊 项目数据盘点</h2>
+
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="num">10</div>
+            <div class="desc">精灵贴图总数</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">22MB → 640KB</div>
+            <div class="desc">贴图体积优化</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">30+</div>
+            <div class="desc">AI交互轮次</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">0</div>
+            <div class="desc">手动写的HTML/CSS</div>
+        </div>
+    </div>
+
+    <!-- 结语 -->
+    <h2>🎯 结语</h2>
+    <p>
+        这次经历让我深刻理解到，AI不是编程的终点，而是编程的放大器。
+        它把"从0到1"的成本降到了极低，让一个人就能完成从前需要设计师、前端、后端、运维
+        四个角色才能做到的事情。
+    </p>
+    <p>
+        但同时，AI编程也提出了新的要求：你需要有判断力去评估AI的输出，
+        有产品思维去定义需求，有系统思维去设计架构。
+        <strong>AI不会取代程序员，但会用AI的程序员会取代不会用的。</strong>
+    </p>
+
+</div>
+
+<div class="footer">
+    海洋冒险 · Ocean Adventure &nbsp;|&nbsp; 用AI从零构建 &nbsp;|&nbsp; 2026
+</div>
+
+</body>
+</html>
